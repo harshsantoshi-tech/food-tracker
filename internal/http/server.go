@@ -15,22 +15,34 @@ type Pinger interface {
 	HealthCheck(ctx context.Context) error
 }
 
+// WhatsAppHandler is implemented by whatsapp.Handler. Declaring it here
+// (rather than importing the whatsapp package's concrete type) keeps
+// this package decoupled from WhatsApp-specific details.
+type WhatsAppHandler interface {
+	HandleVerify(w http.ResponseWriter, r *http.Request)
+	HandleIncoming(w http.ResponseWriter, r *http.Request)
+}
+
+
 // Server holds dependencies needed to build the HTTP router.
 type Server struct {
 	logger   *slog.Logger
 	postgres Pinger
 	redis    Pinger
+	whatsapp WhatsAppHandler
 	timeout  time.Duration
 }
 
-func NewServer(logger *slog.Logger, postgres, redis Pinger, timeout time.Duration) *Server {
-	return &Server{logger: logger, postgres: postgres, redis: redis, timeout: timeout}
+func NewServer(logger *slog.Logger, postgres, redis Pinger, whatsapp WhatsAppHandler, timeout time.Duration) *Server {
+	return &Server{logger: logger, postgres: postgres, redis: redis, whatsapp: whatsapp, timeout: timeout}
 }
 
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /healthz", s.handleHealth)
+	mux.HandleFunc("GET /webhook/whatsapp", s.whatsapp.HandleVerify)
+	mux.HandleFunc("POST /webhook/whatsapp", s.whatsapp.HandleIncoming)
 	return s.withMiddleware(mux)
 }
 

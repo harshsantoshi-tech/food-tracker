@@ -15,6 +15,7 @@ import (
 	"github.com/harshsantoshi-tech/food-tracker/internal/config"
 	apphttp "github.com/harshsantoshi-tech/food-tracker/internal/http"
 	"github.com/harshsantoshi-tech/food-tracker/internal/storage"
+	"github.com/harshsantoshi-tech/food-tracker/internal/whatsapp"
 )
 
 func main() {
@@ -48,7 +49,11 @@ func run(logger *slog.Logger) error {
 	defer redisClient.Close()
 	logger.Info("connected to redis", "addr", cfg.Redis.Addr)
 
-	server := apphttp.NewServer(logger, db, redisClient, cfg.RequestTimeout)
+	dedup := cache.NewRedisDeduplicator(redisClient)
+	waClient := whatsapp.NewClient(cfg.WhatsApp)
+	echoHandler := whatsapp.NewEchoHandler(logger, waClient)
+	waHandler := whatsapp.NewHandler(logger, cfg.WhatsApp, dedup, echoHandler)
+	server := apphttp.NewServer(logger, db, redisClient, waHandler, cfg.RequestTimeout)
 
 	httpServer := &http.Server{
 		Addr:              ":" + cfg.HTTPPort,
