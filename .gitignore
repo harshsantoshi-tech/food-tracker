@@ -1,0 +1,26 @@
+# Environment
+.env
+.env.local
+
+# Go
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+food-tracker-server
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+
+# Coverage
+coverage.out
+coverage.html
