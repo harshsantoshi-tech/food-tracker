@@ -108,3 +108,7 @@ func (c *Client) Complete(ctx context.Context, systemPrompt, userMessage string)
 
 	return "", fmt.Errorf("llm response contained no text content")
 }
+
+// SetBaseURL overrides the API base URL — used by tests to point at a
+// local httptest server instead of the real Anthropic API.
+func (c *Client) SetBaseURL(url string) { c.baseURL = url }

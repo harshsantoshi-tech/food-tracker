@@ -69,3 +69,7 @@ func (c *Client) SendTextMessage(ctx context.Context, to, body string) error {
 
 	return nil
 }
+
+// SetBaseURL overrides the API base URL — used by tests to point at a
+// local httptest server instead of the real WhatsApp Cloud API.
+func (c *Client) SetBaseURL(url string) { c.baseURL = url }

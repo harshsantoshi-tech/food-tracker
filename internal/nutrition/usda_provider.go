@@ -133,3 +133,7 @@ func (p *USDAProvider) getJSON(ctx context.Context, reqURL string, out interface
 	}
 	return nil
 }
+
+// SetBaseURL overrides the API base URL — used by tests to point at a
+// local httptest server instead of the real USDA API.
+func (p *USDAProvider) SetBaseURL(url string) { p.baseURL = url }

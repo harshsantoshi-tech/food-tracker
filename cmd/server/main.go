@@ -12,8 +12,13 @@ import (
 	"time"
 
 	"github.com/harshsantoshi-tech/food-tracker/internal/cache"
+	"github.com/harshsantoshi-tech/food-tracker/internal/calculation"
 	"github.com/harshsantoshi-tech/food-tracker/internal/config"
+	"github.com/harshsantoshi-tech/food-tracker/internal/conversation"
+	"github.com/harshsantoshi-tech/food-tracker/internal/food"
 	apphttp "github.com/harshsantoshi-tech/food-tracker/internal/http"
+	"github.com/harshsantoshi-tech/food-tracker/internal/llm"
+	"github.com/harshsantoshi-tech/food-tracker/internal/nutrition"
 	"github.com/harshsantoshi-tech/food-tracker/internal/storage"
 	"github.com/harshsantoshi-tech/food-tracker/internal/whatsapp"
 )
@@ -49,10 +54,34 @@ func run(logger *slog.Logger) error {
 	defer redisClient.Close()
 	logger.Info("connected to redis", "addr", cfg.Redis.Addr)
 
+	// --- storage layer ---
+	userRepo := storage.NewUserRepository(db)
+	userResolver := storage.NewUserIDResolver(userRepo)
+	foodLogRepo := storage.NewFoodLogRepository(db)
+
+	// --- food understanding (Phase 3) ---
+	llmClient := llm.NewClient(cfg.LLM)
+	foodParser := food.NewParser(llmClient)
+
+	// --- nutrition (Phase 4), wrapped with Redis caching ---
+	usdaProvider := nutrition.NewUSDAProvider(cfg.Nutrition)
+	nutritionCache := cache.NewRedisNutritionCache(redisClient)
+	nutritionProvider := nutrition.NewCachingProvider(usdaProvider, nutritionCache)
+
+	// --- calculation (Phase 5) ---
+	calcEngine := calculation.NewEngine()
+
+	// --- conversation state + orchestration (Phase 6) ---
+	convCache := cache.NewRedisConversationCache(redisClient)
+	convStore := conversation.NewRedisStore(convCache)
+	convManager := conversation.NewManager(foodParser, nutritionProvider, calcEngine, convStore, foodLogRepo)
+
+	// --- WhatsApp (Phase 2), now wired to the real pipeline ---
 	dedup := cache.NewRedisDeduplicator(redisClient)
 	waClient := whatsapp.NewClient(cfg.WhatsApp)
-	echoHandler := whatsapp.NewEchoHandler(logger, waClient)
-	waHandler := whatsapp.NewHandler(logger, cfg.WhatsApp, dedup, echoHandler)
+	pipelineHandler := whatsapp.NewPipelineHandler(logger, userResolver, convManager, waClient)
+	waHandler := whatsapp.NewHandler(logger, cfg.WhatsApp, dedup, pipelineHandler)
+
 	server := apphttp.NewServer(logger, db, redisClient, waHandler, cfg.RequestTimeout)
 
 	httpServer := &http.Server{
@@ -88,6 +117,7 @@ func run(logger *slog.Logger) error {
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		return err
 	}
+
 	logger.Info("server shut down cleanly")
 	return nil
 }

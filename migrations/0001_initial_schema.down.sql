@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS food_items;
+DROP TABLE IF EXISTS food_logs;
+DROP TABLE IF EXISTS users;
